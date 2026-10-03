@@ -655,10 +655,20 @@ public class MainActivity extends Activity {
         content.addView(volumeLabel, new LinearLayout.LayoutParams(-1, dp(30)));
         content.addView(volume, new LinearLayout.LayoutParams(-1, dp(36)));
 
+        speed.setMax(20);
+        speed.setProgress(10);
+
+        pitch.setMax(20);
+        pitch.setProgress(10);
+
+        volume.setMax(100);
+        volume.setProgress(100);
+
         speed.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             public void onProgressChanged(SeekBar b, int p, boolean u) {
+                voiceSpeed = 50 + (p * 5);
                 speedLabel.setText(String.format(
-                        java.util.Locale.US, "Speed     %.1fx", 0.5f + p * 0.1f));
+                        java.util.Locale.US, "Speed     %.1fx", voiceSpeed / 100.0f));
             }
             public void onStartTrackingTouch(SeekBar b) {}
             public void onStopTrackingTouch(SeekBar b) {}
