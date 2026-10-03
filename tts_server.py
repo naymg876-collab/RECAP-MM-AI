@@ -33,6 +33,20 @@ class TTSHandler(BaseHTTPRequestHandler):
                 "voice",
                 "thiha"
             )
+            style = data.get("style", "Normal")
+            
+            STYLE_MAP = {
+                "Normal": {"rate": "+0%", "pitch": "+0Hz"},
+                "Friendly": {"rate": "+5%", "pitch": "+2Hz"},
+                "News": {"rate": "-5%", "pitch": "-1Hz"},
+                "Storytelling": {"rate": "-8%", "pitch": "+1Hz"},
+                "Energetic": {"rate": "+12%", "pitch": "+3Hz"},
+                "Calm": {"rate": "-12%", "pitch": "-2Hz"}
+            }
+            style_settings = STYLE_MAP.get(
+                style,
+                STYLE_MAP["Normal"]
+            )
 
             if not text:
                 raise ValueError(
@@ -54,7 +68,9 @@ class TTSHandler(BaseHTTPRequestHandler):
             asyncio.run(
                 edge_tts.Communicate(
                     text,
-                    voice
+                    voice,
+                    rate=style_settings["rate"],
+                    pitch=style_settings["pitch"]
                 ).save(filename)
             )
 
