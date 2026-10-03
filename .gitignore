@@ -1,0 +1,12 @@
+.gradle/
+build/
+**/build/
+local.properties
+*.apk
+google-services.json
+*.keystore
+*.jks
+__pycache__/
+*.pyc
+.env
+app/google-services.json.old

@@ -1,0 +1,848 @@
+package com.recapmm.ai;
+
+import android.app.Activity;
+import android.os.Bundle;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.view.Gravity;
+import android.widget.*;
+import android.content.Intent;
+import android.text.InputType;
+import android.media.MediaPlayer;
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import org.json.JSONObject;
+
+import com.google.firebase.auth.*;
+import com.google.firebase.FirebaseException;
+import com.google.android.gms.auth.api.signin.*;
+import com.google.android.gms.common.api.ApiException;
+import java.util.concurrent.TimeUnit;
+
+public class MainActivity extends Activity {
+
+    private static final int RC_SIGN_IN = 9001;
+
+    private FirebaseAuth firebaseAuth;
+    private GoogleSignInClient googleSignInClient;
+
+    private String verificationId;
+
+    private EditText phoneNumberInput;
+    private EditText otpInput;
+    private EditText textInput;
+
+    private Spinner countrySpinner;
+    private Spinner voiceSpinner;
+
+    private Button sendOtpButton;
+    private Button verifyOtpButton;
+    private Button speakButton;
+
+    private MediaPlayer mediaPlayer;
+
+    private final int BG = Color.rgb(8, 10, 20);
+    private final int CARD = Color.rgb(22, 20, 42);
+    private final int INPUT = Color.rgb(25, 27, 40);
+    private final int CYAN = Color.rgb(70, 210, 255);
+    private final int PURPLE = Color.rgb(150, 80, 255);
+    private final int PINK = Color.rgb(255, 70, 150);
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        firebaseAuth = FirebaseAuth.getInstance();
+
+        GoogleSignInOptions gso =
+                new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                        .requestIdToken(getString(R.string.default_web_client_id))
+                        .requestEmail()
+                        .build();
+
+        googleSignInClient = GoogleSignIn.getClient(this, gso);
+
+        if (firebaseAuth.getCurrentUser() != null) {
+            showHomeScreen();
+        } else {
+            showLoginScreen();
+        }
+    }
+
+    private GradientDrawable rounded(int color, float radius) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(color);
+        g.setCornerRadius(radius);
+        return g;
+    }
+
+    private TextView text(String value, float size) {
+        TextView t = new TextView(this);
+        t.setText(value);
+        t.setTextColor(Color.WHITE);
+        t.setTextSize(size);
+        t.setPadding(0, 8, 0, 8);
+        return t;
+    }
+
+    private Button actionButton(String value) {
+        Button b = new Button(this);
+        b.setText(value);
+        b.setTextColor(Color.WHITE);
+        b.setTextSize(14);
+        b.setAllCaps(false);
+        b.setBackground(rounded(Color.rgb(48, 35, 80), 28));
+        return b;
+    }
+
+    private void setupRoot(LinearLayout root) {
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(24, 24, 24, 20);
+        root.setBackgroundColor(BG);
+    }
+
+    private ScrollView makeScroll(LinearLayout root) {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(root);
+        return scroll;
+    }
+
+    private void showLoginScreen() {
+        float d = getResources().getDisplayMetrics().density;
+        int dp = (int)(d + 0.5f);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(Color.rgb(5, 4, 14));
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.setPadding(18 * dp, 18 * dp, 18 * dp, 28 * dp);
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.recap_mm_logo);
+        logo.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        root.addView(logo, new LinearLayout.LayoutParams(-1, 150 * dp));
+
+        TextView title = text("RECAP MM AI", 28);
+        title.setGravity(Gravity.CENTER);
+        title.setTextColor(Color.WHITE);
+        root.addView(title, new LinearLayout.LayoutParams(-1, 45 * dp));
+
+        TextView sub = text("AI Video Recap for Myanmar", 14);
+        sub.setGravity(Gravity.CENTER);
+        sub.setTextColor(Color.rgb(245, 90, 190));
+        root.addView(sub, new LinearLayout.LayoutParams(-1, 38 * dp));
+
+        Button googleButton = actionButton("G  Continue with Google");
+        root.addView(googleButton, new LinearLayout.LayoutParams(-1, 56 * dp));
+        googleButton.setOnClickListener(v -> signInWithGoogle());
+
+        TextView or = text("────────  OR  ────────", 12);
+        or.setGravity(Gravity.CENTER);
+        or.setTextColor(Color.GRAY);
+        root.addView(or, new LinearLayout.LayoutParams(-1, 42 * dp));
+
+        LinearLayout phoneRow = new LinearLayout(this);
+        phoneRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        countrySpinner = new Spinner(this);
+        String[] countries = {
+            "🇲🇲 Myanmar (+95)",
+            "🇹🇭 Thailand (+66)",
+            "🇺🇸 USA (+1)",
+            "🇬🇧 UK (+44)",
+            "🇸🇬 Singapore (+65)"
+        };
+        ArrayAdapter<String> countryAdapter = new ArrayAdapter<String>(
+                this,
+                android.R.layout.simple_spinner_dropdown_item,
+                countries
+        );
+        countrySpinner.setAdapter(countryAdapter);
+
+        phoneNumberInput = new EditText(this);
+        phoneNumberInput.setHint("Phone number");
+        phoneNumberInput.setInputType(android.text.InputType.TYPE_CLASS_PHONE);
+        phoneNumberInput.setTextColor(Color.WHITE);
+        phoneNumberInput.setHintTextColor(Color.GRAY);
+        phoneNumberInput.setSingleLine(true);
+
+        phoneRow.addView(countrySpinner, new LinearLayout.LayoutParams(0, 56 * dp, 0.38f));
+        phoneRow.addView(phoneNumberInput, new LinearLayout.LayoutParams(0, 56 * dp, 0.62f));
+        root.addView(phoneRow, new LinearLayout.LayoutParams(-1, 64 * dp));
+
+        Button sendOtp = actionButton("Send OTP");
+        root.addView(sendOtp, new LinearLayout.LayoutParams(-1, 56 * dp));
+        sendOtp.setOnClickListener(v -> sendOtpFromLocalNumber());
+
+        otpInput = new EditText(this);
+        otpInput.setHint("Enter OTP code");
+        otpInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        otpInput.setTextColor(Color.WHITE);
+        otpInput.setHintTextColor(Color.GRAY);
+        otpInput.setSingleLine(true);
+        root.addView(otpInput, new LinearLayout.LayoutParams(-1, 56 * dp));
+
+        Button verifyOtp = actionButton("Verify OTP");
+        root.addView(verifyOtp, new LinearLayout.LayoutParams(-1, 56 * dp));
+        verifyOtp.setOnClickListener(v -> verifyOtp());
+
+        TextView info = text("Secure sign in • Google or Phone OTP", 12);
+        info.setGravity(Gravity.CENTER);
+        info.setTextColor(Color.GRAY);
+        root.addView(info, new LinearLayout.LayoutParams(-1, 45 * dp));
+
+        scroll.addView(root, new ScrollView.LayoutParams(-1, -2));
+        setContentView(scroll);
+    }
+
+    private String getCountryCode() {
+        String selected = countrySpinner.getSelectedItem().toString();
+        int start = selected.indexOf("+");
+        int end = selected.indexOf(")", start);
+        return selected.substring(start, end);
+    }
+
+    private String normalizePhone(String number) {
+
+        number = number.replaceAll("[^0-9]", "");
+
+        while (number.startsWith("0")) {
+            number = number.substring(1);
+        }
+
+        return getCountryCode() + number;
+    }
+
+    private void sendOtpFromLocalNumber() {
+
+        String local =
+                phoneNumberInput.getText().toString().trim();
+
+        if (local.length() < 6) {
+            Toast.makeText(
+                    this,
+                    "ဖုန်းနံပါတ်မှန်အောင်ထည့်ပါ",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+        String phone = normalizePhone(local);
+
+        sendOtpButton.setEnabled(false);
+        sendOtpButton.setText("⏳ OTP ပို့နေသည်...");
+
+        PhoneAuthProvider.getInstance()
+                .verifyPhoneNumber(
+                        phone,
+                        60,
+                        TimeUnit.SECONDS,
+                        this,
+                        new PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+
+                            @Override
+                            public void onVerificationCompleted(
+                                    PhoneAuthCredential credential
+                            ) {
+
+                                firebaseAuth
+                                        .signInWithCredential(credential)
+                                        .addOnCompleteListener(task -> {
+
+                                            sendOtpButton.setEnabled(true);
+                                            sendOtpButton.setText("📩 OTP ပို့မည်");
+
+                                            if (task.isSuccessful()) {
+                                                showHomeScreen();
+                                            }
+                                        });
+                            }
+
+                            @Override
+                            public void onVerificationFailed(
+                                    FirebaseException e
+                            ) {
+
+                                sendOtpButton.setEnabled(true);
+                                sendOtpButton.setText("📩 OTP ပို့မည်");
+
+                                Toast.makeText(
+                                        MainActivity.this,
+                                        "OTP ပို့မရပါ: " + e.getMessage(),
+                                        Toast.LENGTH_LONG
+                                ).show();
+                            }
+
+                            @Override
+                            public void onCodeSent(
+                                    String id,
+                                    PhoneAuthProvider.ForceResendingToken token
+                            ) {
+
+                                verificationId = id;
+
+                                sendOtpButton.setEnabled(true);
+                                sendOtpButton.setText("📩 OTP ပြန်ပို့မည်");
+
+                                Toast.makeText(
+                                        MainActivity.this,
+                                        "OTP Code ပို့ပြီးပါပြီ",
+                                        Toast.LENGTH_SHORT
+                                ).show();
+
+                                otpInput.requestFocus();
+                            }
+                        }
+                );
+    }
+
+    private void verifyOtp() {
+
+        String code =
+                otpInput.getText().toString().trim();
+
+        if (verificationId == null || code.length() != 6) {
+
+            Toast.makeText(
+                    this,
+                    "OTP Code 6 လုံးထည့်ပါ",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+        PhoneAuthCredential credential =
+                PhoneAuthProvider.getCredential(
+                        verificationId,
+                        code
+                );
+
+        firebaseAuth
+                .signInWithCredential(credential)
+                .addOnCompleteListener(this, task -> {
+
+                    if (task.isSuccessful()) {
+                        showHomeScreen();
+                    } else {
+                        Toast.makeText(
+                                this,
+                                "OTP မမှန်ပါ",
+                                Toast.LENGTH_SHORT
+                        ).show();
+                    }
+                });
+    }
+
+    private void signInWithGoogle() {
+
+        startActivityForResult(
+                googleSignInClient.getSignInIntent(),
+                RC_SIGN_IN
+        );
+    }
+
+    @Override
+    protected void onActivityResult(
+            int requestCode,
+            int resultCode,
+            Intent data
+    ) {
+
+        super.onActivityResult(
+                requestCode,
+                resultCode,
+                data
+        );
+
+        if (requestCode != RC_SIGN_IN) {
+            return;
+        }
+
+        try {
+
+            GoogleSignInAccount account =
+                    GoogleSignIn
+                            .getSignedInAccountFromIntent(data)
+                            .getResult(ApiException.class);
+
+            AuthCredential credential =
+                    GoogleAuthProvider.getCredential(
+                            account.getIdToken(),
+                            null
+                    );
+
+            firebaseAuth
+                    .signInWithCredential(credential)
+                    .addOnCompleteListener(this, task -> {
+
+                        if (task.isSuccessful()) {
+                            showHomeScreen();
+                        } else {
+                            Toast.makeText(
+                                    this,
+                                    "Google Login မအောင်မြင်ပါ",
+                                    Toast.LENGTH_LONG
+                            ).show();
+                        }
+                    });
+
+        } catch (Exception e) {
+
+            Toast.makeText(
+                    this,
+                    "Google Login မအောင်မြင်ပါ",
+                    Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    private void showHomeScreen() {
+        float d = getResources().getDisplayMetrics().density;
+        int dp = (int)(d + 0.5f);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(18*dp, 14*dp, 18*dp, 18*dp);
+        root.setBackgroundColor(Color.rgb(8, 7, 18));
+
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.recap_mm_logo);
+        logo.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        header.addView(logo, new LinearLayout.LayoutParams(48*dp, 48*dp));
+
+        LinearLayout brand = new LinearLayout(this);
+        brand.setOrientation(LinearLayout.VERTICAL);
+        brand.setPadding(10*dp, 0, 0, 0);
+
+        TextView title = text("RECAP MM AI", 20);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        brand.addView(title);
+
+        TextView sub = text("Smart AI for your content", 11);
+        sub.setTextColor(Color.rgb(210, 120, 255));
+        brand.addView(sub);
+
+        header.addView(brand, new LinearLayout.LayoutParams(0, 60*dp, 1));
+
+        Button settings = actionButton("⚙");
+        settings.setTextSize(20);
+        header.addView(settings, new LinearLayout.LayoutParams(52*dp, 52*dp));
+        root.addView(header);
+
+        Space gap = new Space(this);
+        root.addView(gap, new LinearLayout.LayoutParams(1, 10*dp));
+
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setGravity(Gravity.CENTER);
+        hero.setPadding(20*dp, 18*dp, 20*dp, 18*dp);
+        hero.setBackground(rounded(Color.rgb(31, 18, 50), 30));
+
+        TextView heroIcon = text("▶", 30);
+        heroIcon.setTextColor(Color.rgb(255, 80, 190));
+        heroIcon.setGravity(Gravity.CENTER);
+        hero.addView(heroIcon);
+
+        TextView heroTitle = text("AI VIDEO RECAP", 22);
+        heroTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        heroTitle.setGravity(Gravity.CENTER);
+        hero.addView(heroTitle);
+
+        TextView heroSub = text("ဗီဒီယိုလင့်ခ်ထည့်ပြီး AI Recap ဖန်တီးပါ", 14);
+        heroSub.setTextColor(Color.LTGRAY);
+        heroSub.setGravity(Gravity.CENTER);
+        hero.addView(heroSub);
+
+        TextView wave = text("〰 〰 〰 〰 〰", 18);
+        wave.setTextColor(Color.rgb(255, 65, 190));
+        wave.setGravity(Gravity.CENTER);
+        hero.addView(wave);
+
+        root.addView(hero, new LinearLayout.LayoutParams(-1, 170*dp));
+
+        TextView platformTitle = text("SUPPORTED PLATFORMS", 13);
+        platformTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        root.addView(platformTitle);
+
+        LinearLayout platforms = new LinearLayout(this);
+        platforms.setPadding(0, 4*dp, 0, 8*dp);
+
+        String[] names = {"▶  YouTube", "f  Facebook", "♪  TikTok", "R  Rednote"};
+        for (int i = 0; i < names.length; i++) {
+            Button b = actionButton(names[i]);
+            b.setTextSize(11);
+            if (i == 0) {
+                b.setTextColor(Color.WHITE);
+                b.setBackground(rounded(Color.rgb(255, 0, 0), 20));
+            } else if (i == 1) {
+                b.setTextColor(Color.WHITE);
+                b.setBackground(rounded(Color.rgb(24, 119, 242), 20));
+            } else if (i == 0) {
+                b.setTextColor(Color.WHITE);
+                b.setBackground(rounded(Color.rgb(20, 20, 25), 20));
+            } else {
+                b.setTextColor(Color.WHITE);
+                b.setBackground(rounded(Color.rgb(230, 45, 95), 20));
+            }
+            LinearLayout.LayoutParams bp =
+                    new LinearLayout.LayoutParams(0, 46*dp, 1);
+            bp.setMargins(3*dp, 0, 3*dp, 0);
+            platforms.addView(b, bp);
+        }
+        root.addView(platforms);
+
+        TextView linkTitle = text("VIDEO LINK", 13);
+        linkTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        root.addView(linkTitle);
+
+        EditText linkInput = new EditText(this);
+        linkInput.setHint("Paste video link...");
+        linkInput.setHintTextColor(Color.rgb(145, 140, 155));
+        linkInput.setTextColor(Color.WHITE);
+        linkInput.setSingleLine(true);
+        linkInput.setPadding(16*dp, 0, 16*dp, 0);
+        linkInput.setBackground(rounded(Color.rgb(25, 21, 38), 22));
+        root.addView(linkInput, new LinearLayout.LayoutParams(-1, 54*dp));
+
+        Button process = actionButton("✨  Video ထုတ်လုပ်ပါ  →");
+        process.setTextSize(17);
+    process.setTypeface(null, android.graphics.Typeface.BOLD);
+        GradientDrawable processBg = new GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{Color.rgb(255, 20, 170), Color.rgb(130, 35, 255)}
+    );
+    processBg.setCornerRadius(30 * dp);
+    process.setBackground(processBg);
+        root.addView(process, new LinearLayout.LayoutParams(-1, 54*dp));
+
+        process.setOnClickListener(v -> {
+            String url = linkInput.getText().toString().trim();
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                Toast.makeText(this, "Valid video URL ထည့်ပါ", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "AI Processing...", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        TextView recapTitle = text("BURMESE AI RECAP", 13);
+        recapTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        root.addView(recapTitle);
+
+        textInput = new EditText(this);
+        textInput.setHint("AI Recap စာသား ဒီနေရာမှာပေါ်လာမယ်...");
+        textInput.setHintTextColor(Color.rgb(145, 140, 155));
+        textInput.setTextColor(Color.WHITE);
+        textInput.setGravity(Gravity.TOP);
+        textInput.setMinLines(5);
+        textInput.setPadding(16*dp, 12*dp, 16*dp, 12*dp);
+        GradientDrawable recapBg = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(38, 20, 58), Color.rgb(24, 18, 42)}
+        );
+        recapBg.setCornerRadius(26 * dp);
+        recapBg.setStroke(2 * dp, Color.rgb(130, 45, 180));
+        textInput.setBackground(recapBg);
+        textInput.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(3000)});
+
+        FrameLayout recapFrame = new FrameLayout(this);
+        recapFrame.setBackground(recapBg);
+        recapFrame.setPadding(4*dp, 4*dp, 4*dp, 4*dp);
+
+        FrameLayout.LayoutParams editParams =
+                new FrameLayout.LayoutParams(-1, -1);
+        editParams.bottomMargin = 30*dp;
+        recapFrame.addView(textInput, editParams);
+
+        TextView counter = text("0/3000", 11);
+        counter.setTextColor(Color.rgb(180, 160, 200));
+        counter.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+
+        FrameLayout.LayoutParams counterParams =
+                new FrameLayout.LayoutParams(-1, 30*dp, Gravity.BOTTOM);
+        counterParams.setMargins(12*dp, 0, 12*dp, 0);
+        recapFrame.addView(counter, counterParams);
+
+        textInput.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                counter.setText(s.length() + "/3000");
+            }
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+
+        root.addView(recapFrame, new LinearLayout.LayoutParams(-1, 165*dp));
+
+        TextView voiceTitle = text("AI VOICE", 13);
+        voiceTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        root.addView(voiceTitle);
+
+        voiceSpinner = new Spinner(this);
+        String[] voices = {"Thiha • Male", "Nilar • Female"};
+    TextView styleTitle = text("VOICE STYLE", 12);
+    styleTitle.setTextColor(Color.LTGRAY);
+    root.addView(styleTitle);
+    Spinner styleSpinner = new Spinner(this);
+    String[] styles = {"Normal", "Friendly", "News", "Storytelling", "Energetic", "Calm"};
+    styleSpinner.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, styles));
+    root.addView(styleSpinner, new LinearLayout.LayoutParams(-1, 54*dp));
+        voiceSpinner.setAdapter(new ArrayAdapter<String>(
+                this,
+                android.R.layout.simple_spinner_dropdown_item,
+                voices
+        ));
+        root.addView(voiceSpinner, new LinearLayout.LayoutParams(-1, 54*dp));
+
+        TextView speedLabel = text("Speed  1.0x", 12);
+        speedLabel.setTextColor(Color.LTGRAY);
+        root.addView(speedLabel);
+
+        SeekBar speedBar = new SeekBar(this);
+        speedBar.setMax(15);
+        speedBar.setProgress(5);
+        root.addView(speedBar, new LinearLayout.LayoutParams(-1, 45*dp));
+        speedBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar b, int p, boolean fromUser) {
+                float speed = 0.5f + (p * 0.1f);
+                speedLabel.setText(String.format(java.util.Locale.US, "Speed  %.1fx", speed));
+            }
+            public void onStartTrackingTouch(SeekBar b) {}
+            public void onStopTrackingTouch(SeekBar b) {}
+        });
+
+        TextView pitchLabel = text("Pitch  0", 12);
+        pitchLabel.setTextColor(Color.LTGRAY);
+        root.addView(pitchLabel);
+
+        SeekBar pitchBar = new SeekBar(this);
+        pitchBar.setMax(20);
+        pitchBar.setProgress(10);
+        root.addView(pitchBar, new LinearLayout.LayoutParams(-1, 45*dp));
+        pitchBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar b, int p, boolean fromUser) {
+                pitchLabel.setText("Pitch  " + (p - 10));
+            }
+            public void onStartTrackingTouch(SeekBar b) {}
+            public void onStopTrackingTouch(SeekBar b) {}
+        });
+
+        TextView volumeLabel = text("Volume  100%", 12);
+        volumeLabel.setTextColor(Color.LTGRAY);
+        root.addView(volumeLabel);
+
+        SeekBar volumeBar = new SeekBar(this);
+        volumeBar.setMax(100);
+        volumeBar.setProgress(100);
+        root.addView(volumeBar, new LinearLayout.LayoutParams(-1, 45*dp));
+        volumeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar b, int p, boolean fromUser) {
+                volumeLabel.setText("Volume  " + p + "%");
+            }
+            public void onStartTrackingTouch(SeekBar b) {}
+            public void onStopTrackingTouch(SeekBar b) {}
+        });
+
+        speakButton = actionButton("🎙  Generate Voice");
+        speakButton.setTextSize(14);
+        speakButton.setBackground(rounded(Color.rgb(165, 38, 120), 25));
+        root.addView(speakButton, new LinearLayout.LayoutParams(-1, 54*dp));
+        speakButton.setOnClickListener(v -> generateVoice());
+
+        Space bottomGap = new Space(this);
+        root.addView(bottomGap, new LinearLayout.LayoutParams(1, 14*dp));
+
+        LinearLayout nav = new LinearLayout(this);
+        nav.setBackground(rounded(Color.rgb(20, 16, 31), 24));
+
+        String[] navIcons = {"⌂", "⇩", "●"};
+        String[] navLabels = {"HOME", "DOWNLOAD", "PROFILE"};
+        for (int i = 0; i < navIcons.length; i++) {
+            LinearLayout item = new LinearLayout(this);
+            item.setOrientation(LinearLayout.VERTICAL);
+            item.setGravity(Gravity.CENTER);
+            item.setPadding(4*dp, 6*dp, 4*dp, 6*dp);
+
+            TextView icon = text(navIcons[i], 34);
+            icon.setGravity(Gravity.CENTER);
+            icon.setTextColor(Color.WHITE);
+            item.addView(icon, new LinearLayout.LayoutParams(-1, 42*dp));
+
+            TextView label = text(navLabels[i], 11);
+            label.setGravity(Gravity.CENTER);
+            label.setTextColor(Color.WHITE);
+            item.addView(label, new LinearLayout.LayoutParams(-1, 30*dp));
+
+            if (i == 0) {
+                item.setBackground(rounded(Color.rgb(185, 25, 145), 28));
+                icon.setTextColor(Color.WHITE);
+                label.setTextColor(Color.WHITE);
+            }
+
+            nav.addView(item, new LinearLayout.LayoutParams(0, 92*dp, 1));
+        }
+        root.addView(nav);
+
+        setContentView(makeScroll(root));
+
+    }
+
+    private void generateVoice() {
+
+        String content =
+                textInput.getText().toString().trim();
+
+        if (content.isEmpty()) {
+
+            Toast.makeText(
+                    this,
+                    "Recap စာသားထည့်ပါ",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+        String voice =
+                voiceSpinner.getSelectedItemPosition() == 0
+                        ? "thiha"
+                        : "nilar";
+
+        speakButton.setEnabled(false);
+        speakButton.setText("⏳ အသံဖန်တီးနေသည်...");
+
+        new Thread(() -> {
+
+            try {
+
+                URL url =
+                        new URL(
+                                "http://10.190.159.249:8765/tts"
+                        );
+
+                HttpURLConnection connection =
+                        (HttpURLConnection)
+                                url.openConnection();
+
+                connection.setRequestMethod("POST");
+                connection.setDoOutput(true);
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(120000);
+                connection.setRequestProperty(
+                        "Content-Type",
+                        "application/json"
+                );
+
+                JSONObject json =
+                        new JSONObject();
+
+                json.put("text", content);
+                json.put("voice", voice);
+
+                OutputStream output =
+                        connection.getOutputStream();
+
+                output.write(
+                        json.toString()
+                                .getBytes("UTF-8")
+                );
+
+                output.close();
+
+                int responseCode =
+                        connection.getResponseCode();
+
+                if (responseCode != 200) {
+                    throw new IOException(
+                            "HTTP " + responseCode
+                    );
+                }
+
+                File audioFile =
+                        new File(
+                                getCacheDir(),
+                                "recap_voice.mp3"
+                        );
+
+                InputStream input =
+                        connection.getInputStream();
+
+                FileOutputStream fileOutput =
+                        new FileOutputStream(audioFile);
+
+                byte[] buffer =
+                        new byte[8192];
+
+                int length;
+
+                while (
+                        (length = input.read(buffer)) != -1
+                ) {
+                    fileOutput.write(
+                            buffer,
+                            0,
+                            length
+                    );
+                }
+
+                fileOutput.close();
+                input.close();
+
+                runOnUiThread(() -> {
+
+                    speakButton.setEnabled(true);
+                    speakButton.setText("🎙 Generate Voice");
+
+                    try {
+
+                        if (mediaPlayer != null) {
+                            mediaPlayer.release();
+                        }
+
+                        mediaPlayer =
+                                new MediaPlayer();
+
+                        mediaPlayer.setDataSource(
+                                audioFile.getAbsolutePath()
+                        );
+
+                        mediaPlayer.prepare();
+                        mediaPlayer.start();
+
+                    } catch (Exception e) {
+
+                        Toast.makeText(
+                                this,
+                                "အသံဖွင့်မရပါ",
+                                Toast.LENGTH_LONG
+                        ).show();
+                    }
+                });
+
+            } catch (Exception e) {
+
+                runOnUiThread(() -> {
+
+                    speakButton.setEnabled(true);
+                    speakButton.setText("🎙 Generate Voice");
+
+                    Toast.makeText(
+                            this,
+                            "Voice server မချိတ်နိုင်ပါ: "
+                                    + e.getMessage(),
+                            Toast.LENGTH_LONG
+                    ).show();
+                });
+            }
+
+        }).start();
+    }
+}

@@ -1,0 +1,365 @@
+package com.recapmm.ai;
+
+import android.app.Activity;
+import android.os.Bundle;
+import android.graphics.Color;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.*;
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import org.json.JSONObject;
+import android.media.MediaPlayer;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.GoogleAuthProvider;
+
+public class MainActivity extends Activity {
+    private void signInWithGoogle() { startActivityForResult(googleSignInClient.getSignInIntent(), RC_SIGN_IN); }
+    private static final int RC_SIGN_IN = 9001;
+
+    EditText textInput;
+    Spinner voiceSpinner;
+    SeekBar speedBar;
+    SeekBar pitchBar;
+    SeekBar volumeBar;
+    Button speakButton;
+
+    MediaPlayer mediaPlayer;
+    FirebaseAuth firebaseAuth;
+    GoogleSignInClient googleSignInClient;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        firebaseAuth = FirebaseAuth.getInstance();
+        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).requestIdToken(getString(R.string.default_web_client_id)).requestEmail().build();
+        googleSignInClient = GoogleSignIn.getClient(this, gso);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(30, 30, 30, 30);
+        root.setBackgroundColor(Color.rgb(15, 15, 20));
+
+        TextView title = new TextView(this);
+        title.setText("RECAP MM AI");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(28);
+        title.setGravity(Gravity.CENTER);
+        root.addView(title);
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("MYANMAR TEXT → VOICE");
+        subtitle.setTextColor(Color.rgb(255, 80, 120));
+        subtitle.setTextSize(16);
+        subtitle.setGravity(Gravity.CENTER);
+        root.addView(subtitle);
+        Button googleButton = new Button(this);
+        googleButton.setText("Google ဖြင့် ဝင်မည်");
+        root.addView(googleButton);
+        googleButton.setOnClickListener(v -> signInWithGoogle());
+
+        textInput = new EditText(this);
+        textInput.setHint("မြန်မာစာ ရိုက်ထည့်ပါ...");
+        textInput.setHintTextColor(Color.GRAY);
+        textInput.setTextColor(Color.WHITE);
+        textInput.setGravity(Gravity.TOP);
+        textInput.setMinLines(8);
+        textInput.setMaxLines(15);
+
+        root.addView(textInput,
+                new LinearLayout.LayoutParams(
+                        -1, 0, 1
+                ));
+
+        voiceSpinner = new Spinner(this);
+
+        String[] voices = {
+                "သီဟ (အမျိုးသား)",
+                "နီလာ (အမျိုးသမီး)"
+        };
+
+        ArrayAdapter<String> adapter =
+                new ArrayAdapter<String>(
+                        this,
+                        android.R.layout.simple_spinner_dropdown_item,
+                        voices
+                );
+
+        voiceSpinner.setAdapter(adapter);
+        root.addView(voiceSpinner);
+
+        addSlider(root, "အသံအမြန်နှုန်း", 50, 150, 100);
+        addSlider(root, "အသံအနိမ့်အမြင့်", 50, 150, 100);
+        addSlider(root, "အသံအကျယ်", 0, 100, 100);
+
+        speedBar = findLastSeekBar(root, 3);
+        pitchBar = findLastSeekBar(root, 2);
+        volumeBar = findLastSeekBar(root, 1);
+
+        speakButton = new Button(this);
+        speakButton.setText("🔊 အသံထုတ်မည်");
+        speakButton.setTextSize(18);
+        speakButton.setTextColor(Color.WHITE);
+        speakButton.setBackgroundColor(Color.rgb(220, 40, 80));
+
+        root.addView(speakButton);
+
+        speakButton.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+
+                String text = textInput.getText().toString().trim();
+
+                if (text.length() == 0) {
+                    Toast.makeText(
+                            MainActivity.this,
+                            "စာထည့်ပါ",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                    return;
+                }
+
+                if (text.length() > 3000) {
+                    Toast.makeText(
+                            MainActivity.this,
+                            "စာလုံးရေ 3000 ထက်မကျော်ရပါ",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                    return;
+                }
+
+                speakButton.setEnabled(false);
+                speakButton.setText("⏳ အသံဖန်တီးနေသည်...");
+
+                String voice =
+                        voiceSpinner.getSelectedItemPosition() == 0
+                                ? "thiha"
+                                : "nilar";
+
+                generateVoice(text, voice);
+            }
+        });
+
+        setContentView(root);
+    }
+
+    private void addSlider(
+            LinearLayout root,
+            String title,
+            int min,
+            int max,
+            int start
+    ) {
+
+        TextView label = new TextView(this);
+        label.setText(title);
+        label.setTextColor(Color.WHITE);
+
+        root.addView(label);
+
+        SeekBar bar = new SeekBar(this);
+
+        bar.setMax(max - min);
+        bar.setProgress(start - min);
+
+        root.addView(bar);
+    }
+
+    private SeekBar findLastSeekBar(
+            LinearLayout root,
+            int fromEnd
+    ) {
+
+        int count = 0;
+
+        for (int i = root.getChildCount() - 1; i >= 0; i--) {
+
+            View view = root.getChildAt(i);
+
+            if (view instanceof SeekBar) {
+
+                count++;
+
+                if (count == fromEnd) {
+                    return (SeekBar) view;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private void generateVoice(
+            final String text,
+            final String voice
+    ) {
+
+        new Thread(new Runnable() {
+
+            @Override
+            public void run() {
+
+                try {
+
+                    URL url =
+                            new URL(
+"http://10.190.159.249:8765/tts"                            );
+                    HttpURLConnection connection =
+                            (HttpURLConnection) url.openConnection();
+
+                    connection.setRequestMethod("POST");
+                    connection.setDoOutput(true);
+                    connection.setRequestProperty(
+                            "Content-Type",
+                            "application/json"
+                    );
+
+                    JSONObject json = new JSONObject();
+
+                    json.put("text", text);
+                    json.put("voice", voice);
+
+                    OutputStream output =
+                            connection.getOutputStream();
+
+                    output.write(
+                            json.toString().getBytes("UTF-8")
+                    );
+
+                    output.flush();
+                    output.close();
+
+                    int responseCode =
+                            connection.getResponseCode();
+
+                    if (responseCode != 200) {
+                        throw new Exception(
+                                "Server Error: " + responseCode
+                        );
+                    }
+
+                    InputStream input =
+                            connection.getInputStream();
+
+                    File audioFile =
+                            new File(
+                                    getCacheDir(),
+                                    "recap_voice.mp3"
+                            );
+
+                    FileOutputStream fileOutput =
+                            new FileOutputStream(audioFile);
+
+                    byte[] buffer = new byte[4096];
+
+                    int length;
+
+                    while (
+                            (length = input.read(buffer))
+                                    != -1
+                    ) {
+
+                        fileOutput.write(
+                                buffer,
+                                0,
+                                length
+                        );
+                    }
+
+                    fileOutput.close();
+                    input.close();
+
+                    connection.disconnect();
+
+                    runOnUiThread(new Runnable() {
+
+                        @Override
+                        public void run() {
+
+                            playAudio(audioFile);
+                        }
+                    });
+
+                } catch (final Exception e) {
+
+                    runOnUiThread(new Runnable() {
+
+                        @Override
+                        public void run() {
+
+                            speakButton.setEnabled(true);
+
+                            speakButton.setText(
+                                    "🔊 အသံထုတ်မည်"
+                            );
+
+                            Toast.makeText(
+                                    MainActivity.this,
+                                    "TTS Server ချိတ်မရပါ\n"
+                                            + e.getMessage(),
+                                    Toast.LENGTH_LONG
+                            ).show();
+                        }
+                    });
+                }
+            }
+
+        }).start();
+    }
+
+    private void playAudio(File file) {
+
+        try {
+
+            if (mediaPlayer != null) {
+                mediaPlayer.release();
+            }
+
+            mediaPlayer = new MediaPlayer();
+
+            mediaPlayer.setDataSource(
+                    file.getAbsolutePath()
+            );
+
+            mediaPlayer.prepare();
+
+            mediaPlayer.start();
+
+            speakButton.setEnabled(true);
+            speakButton.setText("🔊 အသံထုတ်မည်");
+
+        } catch (Exception e) {
+
+            speakButton.setEnabled(true);
+
+            speakButton.setText(
+                    "🔊 အသံထုတ်မည်"
+            );
+
+            Toast.makeText(
+                    this,
+                    "အသံဖွင့်မရပါ",
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+
+        if (mediaPlayer != null) {
+            mediaPlayer.release();
+        }
+
+        super.onDestroy();
+    }
+}
