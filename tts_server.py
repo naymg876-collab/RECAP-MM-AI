@@ -37,12 +37,10 @@ class TTSHandler(BaseHTTPRequestHandler):
             
             STYLE_MAP = {
                 "Normal": {"rate": "+0%", "pitch": "+0Hz"},
-                "Friendly": {"rate": "+5%", "pitch": "+2Hz"},
-                "News": {"rate": "-5%", "pitch": "-1Hz"},
-                "Storytelling": {"rate": "-8%", "pitch": "+1Hz"},
-                "Energetic": {"rate": "+12%", "pitch": "+3Hz"},
-                "Calm": {"rate": "-12%", "pitch": "-2Hz"}
+                "News": {"rate": "-8%", "pitch": "-2Hz"},
+                "Story": {"rate": "-12%", "pitch": "+2Hz"}
             }
+
             style_settings = STYLE_MAP.get(
                 style,
                 STYLE_MAP["Normal"]
