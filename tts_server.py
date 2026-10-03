@@ -9,6 +9,13 @@ VOICE_MAP = {
     "nilar": "my-MM-NilarNeural"
 }
 
+STYLE_MAP = {
+    "Normal": {"rate": 0, "pitch": 0},
+    "News": {"rate": -8, "pitch": -2},
+    "Story": {"rate": -22, "pitch": 4}
+}
+
+
 class TTSHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
@@ -33,17 +40,90 @@ class TTSHandler(BaseHTTPRequestHandler):
                 "voice",
                 "thiha"
             )
-            style = data.get("style", "Normal")
-            
-            STYLE_MAP = {
-                "Normal": {"rate": "+0%", "pitch": "+0Hz"},
-                "News": {"rate": "-8%", "pitch": "-2Hz"},
-                "Story": {"rate": "-22%", "pitch": "+4Hz"}
-            }
+            style = data.get(
+                "style",
+                "Normal"
+            )
+
+            # Android slider values
+            speed = int(
+                data.get("speed", 100)
+            )
+
+            pitch = int(
+                data.get("pitch", 0)
+            )
+
+            volume = int(
+                data.get("volume", 100)
+            )
+
+            # Safe ranges
+            speed = max(
+                50,
+                min(150, speed)
+            )
+
+            pitch = max(
+                -10,
+                min(10, pitch)
+            )
+
+            volume = max(
+                0,
+                min(100, volume)
+            )
 
             style_settings = STYLE_MAP.get(
                 style,
                 STYLE_MAP["Normal"]
+            )
+
+            # Combine style + user controls
+            final_rate = (
+                speed
+                - 100
+                + style_settings["rate"]
+            )
+
+            final_pitch = (
+                pitch
+                + style_settings["pitch"]
+            )
+
+            # edge-tts volume:
+            # 100 = +0%
+            # 50  = -50%
+            # 0   = -100%
+            final_volume = (
+                volume - 100
+            )
+
+            final_rate = max(
+                -50,
+                min(100, final_rate)
+            )
+
+            final_pitch = max(
+                -50,
+                min(50, final_pitch)
+            )
+
+            final_volume = max(
+                -100,
+                min(100, final_volume)
+            )
+
+            rate_string = (
+                f"{final_rate:+d}%"
+            )
+
+            pitch_string = (
+                f"{final_pitch:+d}Hz"
+            )
+
+            volume_string = (
+                f"{final_volume:+d}%"
             )
 
             if not text:
@@ -63,16 +143,32 @@ class TTSHandler(BaseHTTPRequestHandler):
 
             filename = "tts_output.mp3"
 
+            print(
+                "TTS:",
+                voice_name,
+                "speed=", speed,
+                "pitch=", pitch,
+                "volume=", volume,
+                "=>",
+                rate_string,
+                pitch_string,
+                volume_string
+            )
+
             asyncio.run(
                 edge_tts.Communicate(
                     text,
                     voice,
-                    rate=style_settings["rate"],
-                    pitch=style_settings["pitch"]
+                    rate=rate_string,
+                    pitch=pitch_string,
+                    volume=volume_string
                 ).save(filename)
             )
 
-            with open(filename, "rb") as f:
+            with open(
+                filename,
+                "rb"
+            ) as f:
                 audio = f.read()
 
             self.send_response(200)
@@ -92,6 +188,11 @@ class TTSHandler(BaseHTTPRequestHandler):
             self.wfile.write(audio)
 
         except Exception as e:
+
+            print(
+                "TTS ERROR:",
+                str(e)
+            )
 
             error = json.dumps({
                 "error": str(e)
@@ -114,13 +215,19 @@ class TTSHandler(BaseHTTPRequestHandler):
             self.wfile.write(error)
 
 
-port = int(os.environ.get("PORT", "8765"))
+port = int(
+    os.environ.get(
+        "PORT",
+        "8765"
+    )
+)
+
 server = HTTPServer(
     ("0.0.0.0", port),
     TTSHandler
 )
 
 print("RECAP MM AI TTS SERVER")
-print("Running on port 8765")
+print(f"Running on port {port}")
 
 server.serve_forever()
