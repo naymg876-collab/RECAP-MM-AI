@@ -2,6 +2,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import asyncio
 import edge_tts
+import os
 
 VOICE_MAP = {
     "thiha": "my-MM-ThihaNeural",
@@ -99,8 +100,9 @@ class TTSHandler(BaseHTTPRequestHandler):
             self.wfile.write(error)
 
 
+port = int(os.environ.get("PORT", "8765"))
 server = HTTPServer(
-    ("0.0.0.0", 8765),
+    ("0.0.0.0", port),
     TTSHandler
 )
 
