@@ -38,7 +38,7 @@ class TTSHandler(BaseHTTPRequestHandler):
             STYLE_MAP = {
                 "Normal": {"rate": "+0%", "pitch": "+0Hz"},
                 "News": {"rate": "-8%", "pitch": "-2Hz"},
-                "Story": {"rate": "-12%", "pitch": "+2Hz"}
+                "Story": {"rate": "-22%", "pitch": "+4Hz"}
             }
 
             style_settings = STYLE_MAP.get(
