@@ -18,6 +18,17 @@ STYLE_MAP = {
 
 class TTSHandler(BaseHTTPRequestHandler):
 
+    def do_GET(self):
+        if self.path == "/":
+            response = b"RECAP MM AI TTS SERVER OK"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+        else:
+            self.send_error(404)
+
     def do_POST(self):
 
         if self.path != "/tts":
