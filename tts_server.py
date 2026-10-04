@@ -26,6 +26,20 @@ class TTSHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(response)))
             self.end_headers()
             self.wfile.write(response)
+        elif self.path == "/download":
+            try:
+                with open("tts_output.mp3", "rb") as f:
+                    audio = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/mpeg")
+                self.send_header("Content-Disposition", 'attachment; filename="RECAP_MM_AI_Voice.mp3"')
+                self.send_header("Content-Length", str(len(audio)))
+                self.end_headers()
+                self.wfile.write(audio)
+            except FileNotFoundError:
+                self.send_error(404, "No generated audio")
+            except Exception as e:
+                self.send_error(500, str(e))
         else:
             self.send_error(404)
 
